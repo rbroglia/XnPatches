@@ -1,0 +1,195 @@
+#!/bin/bash
+#===============================================================================
+#         USAGE: ./XnPatches-ui
+#        AUTHOR: Stefano Zaghi
+#       CREATED: 02/22/2012 06:50:23 PM CET
+#===============================================================================
+# defaults
+FileGRD="cc"
+FileICC="cc"
+FileSOL="unset"
+FileOUT="unset"
+cell=""
+patch="-p 1"
+grl=`printf "%2.2d" 1`
+np=1
+ifl="unset"
+unsteady=0
+levelset=""
+eq="-eq 1"
+outdir="unset"
+forces=""
+yplus=""
+metrics=""
+ascii=""
+tec=""
+vtk=""
+os=""
+prc=""
+job=1
+
+function print_usage {
+  echo
+  echo "`basename $0`"
+  echo "User-interface of XnPatches code"
+  echo "Usage: `basename $0` [opts [args]]"
+  echo "Valid options are all the options of XnPatches code (see XnPatches for the complete list) plus the following:"
+  echo "  [ -l grid_level -n processors_number -f flip_value -u (for unsteady sim) -od output_dir -j #concurrent_jobs]"
+  echo
+  echo "Defaults of optional arguments:"
+  echo "  -l 1"
+  echo "  -n 1"
+  echo "  -f 'last' => last flip-flop|0|1"
+  echo "  steady sim"
+  echo "  -od ."
+  echo "  -j 1"
+  echo
+  echo "Examples:"
+  echo "  XnPatches-ui -g cc -i cc                        -o mesh -n 8 (process only mesh of wall)"
+  echo "  XnPatches-ui -g cc -i cc -s sol -forces -Re 1d6 -o sol  -n 8 (solution and forces are saved)"
+  echo
+  echo "Note: this user-interface constructs itself the name for cuttered files thus with -g, -i and -s only the base_name"
+  echo "      of files must be provided."
+  echo
+}
+if [ $# -eq 0 ] ; then
+  print_usage
+  exit
+fi
+
+#parsing command line
+while [ $# -gt 0 ]; do
+  case "$1" in
+    "-g")
+      shift; FileGRD=$1
+      ;;
+    "-i")
+      shift; FileICC=$1
+      ;;
+    "-s")
+      shift; FileSOL=$1
+      ;;
+    "-o")
+      shift; FileOUT=$1
+      ;;
+    "-p")
+      shift; patch="-p "$1
+      ;;
+    "-cell")
+      cell=$1
+      ;;
+    "-l")
+      shift; grl=`printf "%2.2d" $1`
+      ;;
+    "-n")
+      shift; np=$1
+      ;;
+    "-f")
+      shift
+      if [ "$1" != "last" ] ; then
+       ifl=`printf "%2.2d" $1`
+      fi
+      ;;
+    "-u")
+      unsteady=1
+      ;;
+    "-ls")
+      levelset=$1
+      ;;
+    "-eq")
+      shift; eq="-eq "$1
+      ;;
+    "-Re")
+      shift; Re="-Re "$1
+      ;;
+    "-Fr")
+      shift; Fr="-Fr "$1
+      ;;
+    "-zfs")
+      shift; zfs="-zfs "$1
+      ;;
+    "-od")
+      shift; outdir=$1
+      ;;
+    "-forces")
+      forces=$1
+      ;;
+    "-yplus")
+      yplus=$1
+      ;;
+    "-metrics")
+      metrics=$1
+      ;;
+    "-ascii")
+      ascii=$1
+      ;;
+    "-tec")
+      shift; tec="-tec "$1
+      ;;
+    "-vtk")
+      shift; vtk="-vtk "$1
+      ;;
+    "-os")
+      shift; os="-os "$1
+      ;;
+    "-proc")
+      prc="-proc"
+      ;;
+    "-j")
+      shift; job=$1
+      ;;
+    *)
+      echo; echo "Unknown switch $1"; print_usage; exit 1
+      ;;
+  esac
+  shift
+done
+npm1=$(($np-1))
+if [ "$ifl" == "unset" ] ; then
+  if [ "$FileSOL" != "unset" ] ; then
+    ifl=`ls -lt $FileSOL'_'??.$grl.p000 | head -n 1 | awk -F _ '{print $2}' | awk -F . '{print $1}'`
+    echo "Last flip-flop file $ifl"
+  else
+    if [ $unsteady -eq 1 ] ; then
+      ifl=`ls -lt $FileGRD'_'??.$grl.grd.p000 | head -n 1 | awk -F _ '{print $2}' | awk -F . '{print $1}'`
+      echo "Last flip-flop file $ifl"
+    fi
+  fi
+  fi
+if [ "$outdir" == "unset" ] ; then
+  outdir="./"
+else
+  if [ "${outdir: -1}" != "/" ] ; then
+    $outdir = $outdir"/"
+  fi
+fi
+
+# post-processing files
+for p in $( seq 0 1 $npm1 ); do
+  proc=`printf "%3.3d" $p`
+  if [ "$prc" != "" ] ; then
+    prc="-proc "$p
+  fi
+  if [ $unsteady -eq 1 ] ; then
+    GRD="-g $FileGRD"_"$ifl.$grl.grd.p$proc"
+    ICC="-i $FileICC"_"$ifl.$grl.p$proc"
+  else
+    GRD="-g $FileGRD.$grl.grd.p$proc"
+    ICC="-i $FileICC.$grl.p$proc"
+  fi
+  if [ "$FileSOL" != "unset" ] ; then
+    SOL="-s $FileSOL"_"$ifl.$grl.p$proc"
+	else
+		SOL=""
+	fi
+  if [ "$FileOUT" != "unset" ] ; then
+    OUT="-o $outdir$FileOUT.$grl.p$proc"
+	else
+		OUT=""
+	fi
+  echo "XnPatches $GRD $ICC $SOL $OUT $cell $patch $levelset $eq $Re $Fr $zfs $forces $yplus $metrics $ascii $tec $vtk $os $prc"
+  nohup XnPatches $GRD $ICC $SOL $OUT $cell $patch $levelset $eq $Re $Fr $zfs $forces $yplus $metrics $ascii $tec $vtk $os $prc> /dev/null 2>&1 &
+  let count+=1
+  [[ $((count%$job)) -eq 0 ]] && wait
+done
+exit 0
