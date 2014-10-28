@@ -4,6 +4,7 @@ module Data_Type_PostProcess
 USE IR_Precision                     ! Integers and reals precision definition.
 USE Data_Type_Command_Line_Interface ! Definition of Type_Command_Line_Interface.
 USE Data_Type_OS                     ! Definition of Type_OS.
+USE Data_Type_Vector                 ! Definition of Type_Vector.
 USE Lib_IO_Misc                      ! Library for miscellanea IO procedures.
 !-----------------------------------------------------------------------------------------------------------------------------------
 
@@ -25,8 +26,20 @@ type, public:: Type_PostProcess
   integer(I4P)::              unit_grd       = 0_I4P     !< Unit of GRD file.
   integer(I4P)::              unit_icc       = 0_I4P     !< Unit of ICC file.
   integer(I4P)::              unit_sol       = 0_I4P     !< Unit of Solution file.
-  logical::                   fcc            = .false.   !< Inquiring flag for icc file.
-  logical::                   ngc            = .false.   !< Inquiring flag for grd without ghosts cells.
+  integer(I4P)::              unit_for       = 0_I4P     !< Unit of forces.dat file.
+  integer(I4P)::              Ng             = 0_I4P     !< Number of groups.
+  integer(I4P), allocatable:: unit_g_for(:)              !< Unit of forces.dat file for each group.
+  integer(I4P)::              patch          = 1_I4P     !< Boundary condition value of post-processed patches.
+  integer(I4P)::              s_offset       = 0_I4P     !< Streamline patch offset.
+  real(R8P)::                 Re             = -1._R_P   !< Reynolds number.
+  real(R8P)::                 Fr             = -1._R_P   !< Froude number.
+  real(R8P)::                 rFr2           = 0._R_P    !< 1/(Froude number)^2.
+  real(R8P)::                 zfs            = 1.D100    !< Z quote of free surface.
+  type(Type_Vector)::         fsum_p                     !< Global sum of forces vector, pressure part.
+  type(Type_Vector)::         fsum_v                     !< Global sum of forces vector, viscous part.
+  type(Type_Vector)::         msum_p                     !< Global sum of moments vector, pressure part.
+  type(Type_Vector)::         msum_v                     !< Global sum of moments vector, viscous part.
+  real(R8P)::                 Ssum           = 0._R8P    !< Global sum of "wet" surface.
   logical::                   sol            = .false.   !< Inquiring flag for solution file.
   logical::                   cell           = .false.   !< Inquiring flag for interpolation (or not) variables at nodes.
   logical::                   level_set      = .false.   !< Inquiring flag for level set variable.
@@ -34,11 +47,13 @@ type, public:: Type_PostProcess
   logical::                   zeroeq         = .false.   !< Inquiring flag for zero equations turbulent variables.
   logical::                   oneeq          = .true.    !< Inquiring flag for one  equations turbulent variables.
   logical::                   twoeq          = .false.   !< Inquiring flag for two  equations turbulent variables.
-  logical::                   vordet         = .false.   !< Inquiring flag for vordet variable computing.
   logical::                   binary         = .true.    !< Inquiring flag for binary output file.
   logical::                   tec            = .true.    !< Inquiring flag for tecplot file format.
   logical::                   vtk            = .false.   !< Inquiring flag for vtk file format.
   logical::                   global_blk_num = .false.   !< Flag for inquiring the activation of global blocks numeration.
+  logical::                   forces         = .false.   !< Inquiring flag for forces computing.
+  logical::                   yp             = .false.   !< Inquiring flag for yplus computing.
+  logical::                   metrics        = .false.   !< Inquiring flag for metrics saving.
   logical::                   verbose        = .false.   !< Verbose output.
   type(Type_OS)::             OS                         !< Running architecture.
   integer(I4P), allocatable:: blockmap(:,:),procmap(:,:) !< Blocks maps.
@@ -48,6 +63,7 @@ type, public:: Type_PostProcess
     procedure:: set_from_procinput ! Procedure for setting global block numeration if proc.input is found.
     procedure:: set_blockmap       ! Procedure for setting block maps if local numeration is used.
     procedure:: input_files_init   ! Procedure for initializing input files.
+    procedure:: save_forces        ! Procedure for saving forces global integral.
     procedure:: finalize           ! Procedure for finalizing post-processor.
 endtype Type_PostProcess
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -70,24 +86,29 @@ contains
 
   !---------------------------------------------------------------------------------------------------------------------------------
   ! getting CLA values
-  call cli%get(switch='-g',     val=pp%File_grd, error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-o',     val=pp%File_out, error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-i',     val=pp%File_icc, error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-s',     val=pp%File_sol, error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-ngc',   val=pp%ngc,      error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-cell',  val=pp%cell,     error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-ls',    val=pp%level_set,error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-nt',    val=pp%laminar,  error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-eq',    val=turb_eq,     error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-vordet',val=pp%vordet,   error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-ascii', val=ascii,       error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-tec',   val=tec_f,       error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-vtk',   val=vtk_f,       error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-proc',  val=pp%myrank,   error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-os',    val=os_type,     error=error,pref='|-->'); if (error/=0) stop
-  call cli%get(switch='-v',     val=pp%verbose,  error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-g',       val=pp%File_grd, error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-o',       val=pp%File_out, error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-i',       val=pp%File_icc, error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-s',       val=pp%File_sol, error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-p',       val=pp%patch,    error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-Fr',      val=pp%Fr,       error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-Re',      val=pp%Re,       error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-zfs',     val=pp%zfs,      error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-cell',    val=pp%cell,     error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-forces',  val=pp%forces,   error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-metrics', val=pp%metrics,  error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-yplus',   val=pp%yp,       error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-ls',      val=pp%level_set,error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-nt',      val=pp%laminar,  error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-eq',      val=turb_eq,     error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-stream',  val=pp%s_offset, error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-ascii',   val=ascii,       error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-tec',     val=tec_f,       error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-vtk',     val=vtk_f,       error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-proc',    val=pp%myrank,   error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-os',      val=os_type,     error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-v',       val=pp%verbose,  error=error,pref='|-->'); if (error/=0) stop
   ! using CLA values for driving XnPlot
-  if (adjustl(trim(pp%File_icc))/='unset') pp%fcc = .true.
   if (adjustl(trim(pp%File_sol))/='unset') pp%sol = .true.
   if (adjustl(trim(pp%File_out))=='unset') pp%File_out = adjustl(trim(pp%File_grd))
   if (pp%laminar) then
@@ -105,6 +126,7 @@ contains
     pp%twoeq = .true.
     pp%oneeq = .false.
   endselect
+  if (pp%Fr>0) pp%rFr2 = 1._R8P/(pp%Fr*pp%Fr)
   if (ascii) pp%binary = .false.
   pp%tec = (Upper_Case(adjustl(trim(tec_f)))=='YES')
   pp%vtk = (Upper_Case(adjustl(trim(vtk_f)))=='YES')
@@ -118,10 +140,6 @@ contains
      write(stderr,'(A)') '+--> Incompatible switches, laminar disables turbulent model'
      stop
   end if
-  if ((pp%vordet.and.(.not.pp%fcc)).or.(pp%vordet.and.(.not.pp%sol))) then
-    write(stderr,'(A)') '+--> In order to compute "vordet" variables the icc and sol files must be provided.'
-    stop
-  endif
   ! converting the directory separators of files names according to the OS using
   pp%File_grd = adjustl(trim(pp%File_grd)) ; pp%File_grd = pp%OS%string_separator_fix(string=pp%File_grd)
   pp%File_icc = adjustl(trim(pp%File_icc)) ; pp%File_icc = pp%OS%string_separator_fix(string=pp%File_icc)
@@ -139,7 +157,6 @@ contains
   logical::                                is_file  !< Flag for inquiring the presence of file.
   integer(I4P)::                           error    !< Error trapping flag.
   integer(I4P)::                           unitfree !< Free logical unit.
-  real(R8P)::                              Fr       !< Froude number.
   integer(I4P)::                           e        !< Counter.
   character(100)::                         string   !< Dummy string.
   logical::                                balom
@@ -169,12 +186,17 @@ contains
     do e=1,e+9 ! skip the e+9 records
       read(unitfree,*)
     enddo
-    read(unitfree,*)        ! Reynolds number
-    read(unitfree,*) Fr     ! Foude number
-    if (Fr>0._R8P) pp%level_set = .true.
+    read(unitfree,*) pp%Re  ! Reynolds number
+    read(unitfree,*) pp%Fr  ! Foude number
     read(unitfree,*)
     read(unitfree,*) string ! turbulence model
+    read(unitfree,*)
+    read(unitfree,*) pp%zfs ! quote of free surface
     close(unitfree)
+    if (pp%Fr>0._R_P) then
+      pp%level_set = .true.
+      pp%rFr2 = 1._R_P/(pp%Fr*pp%Fr)
+    endif
     ! checking turbulence model
     if (string(1:3)=='bal'.or.string(1:3)=='BAL') balom = .true.
     if (string(1:3)=='sgs'.or.string(1:3)=='SGS') sgs   = .true.
@@ -194,6 +216,8 @@ contains
     pp%oneeq  = spall
     pp%twoeq  = (lambr.OR.chang)
     write(stdout,'(A)') '+--> Found mb.par'
+    write(stdout,'(A)') '|--> Reynolds number '//str(n=pp%Re)
+    write(stdout,'(A)') '|--> Froude   number '//str(n=pp%Fr)
     if (pp%level_set) then
       write(stdout,'(A)') '|--> Free sruface present'
     else
@@ -231,6 +255,7 @@ contains
     if (.not.is_file) then
       error = File_Not_Found(filename='proc.input',cpn='parse_command_arguments')
     else
+      write(stdout,'(A)') '+--> Found proc.input'
       open(unit=Get_Unit(unitfree),file="proc.input",action='READ')
       read(unitfree,*) ! record skipped
       read(unitfree,*) ! record skipped
@@ -245,6 +270,7 @@ contains
       end do
       close(unitfree)
       nprocs = maxval(pp%procmap(2,:))
+      pp%Ng  = maxval(pp%procmap(1,:))
       ! computing the local (of myrank) number of blocks
       Nb = 0
       do b=1,Nbtot
@@ -290,6 +316,7 @@ contains
   class(Type_PostProcess), intent(INOUT):: pp      !< Post-processing options.
   logical::                                is_file !< Flag for inquiring the presence of file.
   integer(I4P)::                           error   !< Error trapping flag.
+  integer(I4P)::                           g       !< Counter.
   !---------------------------------------------------------------------------------------------------------------------------------
 
   !---------------------------------------------------------------------------------------------------------------------------------
@@ -299,13 +326,11 @@ contains
   else
     open(unit=Get_Unit(pp%unit_grd),file=adjustl(trim(pp%File_grd)),form='UNFORMATTED',action='READ')
   endif
-  if (pp%fcc) then
-    inquire(file=adjustl(trim(pp%File_icc)),exist=is_file,iostat=error)
-    if (.NOT.is_file) then
-      error = File_Not_Found(filename=pp%File_icc,cpn='input_files_init')
-    else
-      open(unit=Get_Unit(pp%unit_icc),file=adjustl(trim(pp%File_icc)),form='UNFORMATTED',action='READ')
-    endif
+  inquire(file=adjustl(trim(pp%File_icc)),exist=is_file,iostat=error)
+  if (.NOT.is_file) then
+    error = File_Not_Found(filename=pp%File_icc,cpn='input_files_init')
+  else
+    open(unit=Get_Unit(pp%unit_icc),file=adjustl(trim(pp%File_icc)),form='UNFORMATTED',action='READ')
   endif
   if (pp%sol) then
     inquire(file=adjustl(trim(pp%File_sol)),exist=is_file,iostat=error)
@@ -315,24 +340,106 @@ contains
       open(unit=Get_Unit(pp%unit_sol),file=adjustl(trim(pp%File_sol)),form='UNFORMATTED',action='READ')
     endif
   endif
+  if (pp%forces) then
+    !if (pp%forcesRB) then
+    !  open(unit=Get_Unit(unit_for_RB),file=adjustl(trim(File_out))//"-forces.RB",form='UNFORMATTED')
+    !  open(unit=Get_Unit(unit_for_RB_scr),form='UNFORMATTED',status='SCRATCH')
+    !endif
+    if (pp%Ng>0) then
+      if (allocated(pp%unit_g_for)) deallocate(pp%unit_g_for) ; allocate(pp%unit_g_for(0:pp%Ng))
+      do g=0,pp%Ng
+        open(unit=Get_Unit(pp%unit_g_for(g)),file=adjustl(trim(pp%File_out))//"-forces-grp_"//trim(strz(3,g))//".dat")
+      enddo
+    endif
+  endif
   return
   !---------------------------------------------------------------------------------------------------------------------------------
   endsubroutine input_files_init
+
+  !> @brief Procedure for saving forces global integral.
+  function save_forces(pp) result(error)
+  !---------------------------------------------------------------------------------------------------------------------------------
+  implicit none
+  class(Type_PostProcess), intent(INOUT):: pp    !< Post-processing options.
+  integer(I4P)::                           error !< Error trapping flag.
+  !---------------------------------------------------------------------------------------------------------------------------------
+
+  !---------------------------------------------------------------------------------------------------------------------------------
+  open(unit=Get_Unit(pp%unit_for),file=adjustl(trim(pp%File_out))//"-forces.dat")
+  write(pp%unit_for,'(A)',iostat=error)trim(str(n=(pp%fsum_v%x+pp%fsum_p%x)))//' '// &
+                                       trim(str(n=(pp%fsum_v%y+pp%fsum_p%y)))//' '// &
+                                       trim(str(n=(pp%fsum_v%z+pp%fsum_p%z)))//' '// &
+                                       trim(str(n=(            pp%fsum_p%x)))//' '// &
+                                       trim(str(n=(            pp%fsum_p%y)))//' '// &
+                                       trim(str(n=(            pp%fsum_p%z)))//' '// &
+                                       trim(str(n=(pp%fsum_v%x            )))//' '// &
+                                       trim(str(n=(pp%fsum_v%y            )))//' '// &
+                                       trim(str(n=(pp%fsum_v%z            )))//' '// &
+                                       trim(str(n=(pp%msum_v%x+pp%msum_p%x)))//' '// &
+                                       trim(str(n=(pp%msum_v%y+pp%msum_p%y)))//' '// &
+                                       trim(str(n=(pp%msum_v%z+pp%msum_p%z)))//' '// &
+                                       trim(str(n=(            pp%msum_p%x)))//' '// &
+                                       trim(str(n=(            pp%msum_p%y)))//' '// &
+                                       trim(str(n=(            pp%msum_p%z)))//' '// &
+                                       trim(str(n=(pp%msum_v%x            )))//' '// &
+                                       trim(str(n=(pp%msum_v%y            )))//' '// &
+                                       trim(str(n=(pp%msum_v%z            )))//' '// &
+                                       trim(str(n=(pp%Ssum                )))//' '// &
+                                       'Fx,Fy,Fz,Fx_p,Fy_p,Fz_p,Fx_v,Fy_v,Fz_v,Mx,My,Mz,Mx_p,My_p,Mz_p,Mx_v,My_v,Mz_v,S of file "'&
+                                       //adjustl(trim(pp%File_sol))//'"'
+  close(pp%unit_for)
+!  if (forcesRB) then
+    !if (Np>0) then
+      !if (allocated(Ni)) deallocate(Ni) ; allocate(Ni(1:1))
+      !if (allocated(Nj)) deallocate(Nj) ; allocate(Nj(1:1))
+      !if (allocated(Nk)) deallocate(Nk) ; allocate(Nk(1:1))
+      !write(unit_for_RB)Np
+      !rewind(unit_for_RB_scr)
+      !do
+        !read(unit_for_RB_scr,err=10,end=10)b,v,Ni(1),Nj(1),Nk(1)
+        !write(unit_for_RB)b,v,Ni(1),Nj(1),Nk(1)
+        !if (allocated(dummy)) deallocate(dummy) ; allocate(dummy(1:Ni(1),1:Nj(1),1:Nk(1)))
+        !do i=1,12
+          !read(unit_for_RB_scr,err=10)dummy
+        !enddo
+      !enddo
+      !10 continue
+      !rewind(unit_for_RB_scr)
+      !do
+        !read(unit_for_RB_scr,err=20,end=20)b,v,Ni(1),Nj(1),Nk(1)
+        !if (allocated(dummy)) deallocate(dummy) ; allocate(dummy(1:Ni(1),1:Nj(1),1:Nk(1)))
+        !do i=1,12
+          !read(unit_for_RB_scr,err=20,end=20)dummy
+          !write(unit_for_RB)dummy
+        !enddo
+      !enddo
+      !20 continue
+    !endif
+    !close(unit_for_RB)     ! Riccardo Broglia forces.RB
+    !close(unit_for_RB_scr) ! Riccardo Broglia forces.RB scratch file
+  !endif
+  return
+  !---------------------------------------------------------------------------------------------------------------------------------
+  endfunction save_forces
 
   !> @brief Procedure for finalizing post-processor.
   subroutine finalize(pp)
   !---------------------------------------------------------------------------------------------------------------------------------
   implicit none
   class(Type_PostProcess), intent(INOUT):: pp !< Post-processing options.
+  integer(I4P)::                           g  !< Counter.
   !---------------------------------------------------------------------------------------------------------------------------------
 
   !---------------------------------------------------------------------------------------------------------------------------------
   close(pp%unit_grd)
-  if (pp%fcc) then
-    close(pp%unit_icc)
-  endif
+  close(pp%unit_icc)
   if (pp%sol) then
     close(pp%unit_sol)
+  endif
+  if (pp%Ng>0.and.pp%forces) then
+    do g=0,pp%Ng
+      close(pp%unit_g_for(g))
+    enddo
   endif
   return
   !---------------------------------------------------------------------------------------------------------------------------------

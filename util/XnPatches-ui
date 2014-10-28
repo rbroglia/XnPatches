@@ -17,6 +17,7 @@ ifl="unset"
 unsteady=0
 levelset=""
 eq="-eq 1"
+stream="-stream 0"
 outdir="unset"
 forces=""
 yplus=""
@@ -98,6 +99,9 @@ while [ $# -gt 0 ]; do
       ;;
     "-eq")
       shift; eq="-eq "$1
+      ;;
+    "-stream")
+      shift; stream="-stream "$1
       ;;
     "-Re")
       shift; Re="-Re "$1
@@ -187,8 +191,8 @@ for p in $( seq 0 1 $npm1 ); do
 	else
 		OUT=""
 	fi
-  echo "XnPatches $GRD $ICC $SOL $OUT $cell $patch $levelset $eq $Re $Fr $zfs $forces $yplus $metrics $ascii $tec $vtk $os $prc"
-  nohup XnPatches $GRD $ICC $SOL $OUT $cell $patch $levelset $eq $Re $Fr $zfs $forces $yplus $metrics $ascii $tec $vtk $os $prc> /dev/null 2>&1 &
+  echo "XnPatches $GRD $ICC $SOL $OUT $cell $patch $levelset $eq $stream $Re $Fr $zfs $forces $yplus $metrics $ascii $tec $vtk $os $prc"
+  nohup XnPatches $GRD $ICC $SOL $OUT $cell $patch $levelset $eq $stream $Re $Fr $zfs $forces $yplus $metrics $ascii $tec $vtk $os $prc> /dev/null 2>&1 &
   let count+=1
   [[ $((count%$job)) -eq 0 ]] && wait
 done
