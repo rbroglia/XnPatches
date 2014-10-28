@@ -2,7 +2,7 @@ program XnPatches
 !-----------------------------------------------------------------------------------------------------------------------------------
 ! Code Name XnPatches
 ! Author    Stefano Zaghi
-! Version   0.0.3
+! Version   0.0.4
 ! Date      28-10-2014
 !
 ! XnPatches loads Xnavis mesh and solution files and produces post-processed Tecplot file of selected patches.

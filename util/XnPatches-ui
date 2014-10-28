@@ -151,11 +151,11 @@ done
 npm1=$(($np-1))
 if [ "$ifl" == "unset" ] ; then
   if [ "$FileSOL" != "unset" ] ; then
-    ifl=`ls -lt $FileSOL'_'??.$grl.p000 | head -n 1 | awk -F _ '{print $2}' | awk -F . '{print $1}'`
+    ifl=`ls -t $FileSOL'_'??.$grl.p000 | head -n 1 | sed -e "s@$FileSOL@@" | awk -F _ '{print $2}' | awk -F . '{print $1}'`
     echo "Last flip-flop file $ifl"
   else
     if [ $unsteady -eq 1 ] ; then
-      ifl=`ls -lt $FileGRD'_'??.$grl.grd.p000 | head -n 1 | awk -F _ '{print $2}' | awk -F . '{print $1}'`
+      ifl=`ls -lt $FileGRD'_'??.$grl.grd.p000 | head -n 1 | sed -e "s@$FileSOL@@" | awk -F _ '{print $2}' | awk -F . '{print $1}'`
       echo "Last flip-flop file $ifl"
     fi
   fi
