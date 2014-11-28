@@ -176,7 +176,7 @@ do b=1,Nb ! post processing patches
       enddo
     enddo
   endif
-  if (pp%metrics.or.pp%forces.or.pp%yp) then
+  if (pp%metrics.or.pp%forces.or.pp%yp.or.pp%tau) then
     ! computing the metrics of cells
     call compute_metrics(gc=gc(:,b),Ni=Ni(b),Nj=Nj(b),Nk=Nk(b))
     ! correcting the metrics of boundary conditions cells
@@ -235,6 +235,13 @@ do b=1,Nb ! post processing patches
                                  ci1 = ci1, ci2 = ci2, &
                                  cj1 = cj1, cj2 = cj2, &
                                  ck1 = ck1, ck2 = ck2)
+      if (pp%tau) call compute_tau(pp=pp,face=1,         &
+                                   ni1 = ni1, ni2 = ni2, &
+                                   nj1 = nj1, nj2 = nj2, &
+                                   nk1 = nk1, nk2 = nk2, &
+                                   ci1 = ci1, ci2 = ci2, &
+                                   cj1 = cj1, cj2 = cj2, &
+                                   ck1 = ck1, ck2 = ck2)
       if (pp%tec) error = file_tec%save_patch(Np=Np,pp=pp,b=b,face=1,&
                                               ni1 = ni1, ni2 = ni2,  &
                                               nj1 = nj1, nj2 = nj2,  &
@@ -269,6 +276,13 @@ do b=1,Nb ! post processing patches
                                  ci1 = ci1, ci2 = ci2, &
                                  cj1 = cj1, cj2 = cj2, &
                                  ck1 = ck1, ck2 = ck2)
+      if (pp%tau) call compute_tau(pp=pp,face=2,         &
+                                   ni1 = ni1, ni2 = ni2, &
+                                   nj1 = nj1, nj2 = nj2, &
+                                   nk1 = nk1, nk2 = nk2, &
+                                   ci1 = ci1, ci2 = ci2, &
+                                   cj1 = cj1, cj2 = cj2, &
+                                   ck1 = ck1, ck2 = ck2)
       if (pp%tec) error = file_tec%save_patch(Np=Np,pp=pp,b=b,face=2,&
                                               ni1 = ni1, ni2 = ni2,  &
                                               nj1 = nj1, nj2 = nj2,  &
@@ -302,6 +316,13 @@ do b=1,Nb ! post processing patches
                                  ci1 = ci1, ci2 = ci2, &
                                  cj1 = cj1, cj2 = cj2, &
                                  ck1 = ck1, ck2 = ck2)
+      if (pp%tau) call compute_tau(pp=pp,face=3,         &
+                                   ni1 = ni1, ni2 = ni2, &
+                                   nj1 = nj1, nj2 = nj2, &
+                                   nk1 = nk1, nk2 = nk2, &
+                                   ci1 = ci1, ci2 = ci2, &
+                                   cj1 = cj1, cj2 = cj2, &
+                                   ck1 = ck1, ck2 = ck2)
       if (pp%tec) error = file_tec%save_patch(Np=Np,pp=pp,b=b,face=3,&
                                               ni1 = ni1, ni2 = ni2,  &
                                               nj1 = nj1, nj2 = nj2,  &
@@ -335,6 +356,13 @@ do b=1,Nb ! post processing patches
                                  ci1 = ci1, ci2 = ci2, &
                                  cj1 = cj1, cj2 = cj2, &
                                  ck1 = ck1, ck2 = ck2)
+      if (pp%tau) call compute_tau(pp=pp,face=4,         &
+                                   ni1 = ni1, ni2 = ni2, &
+                                   nj1 = nj1, nj2 = nj2, &
+                                   nk1 = nk1, nk2 = nk2, &
+                                   ci1 = ci1, ci2 = ci2, &
+                                   cj1 = cj1, cj2 = cj2, &
+                                   ck1 = ck1, ck2 = ck2)
       if (pp%tec) error = file_tec%save_patch(Np=Np,pp=pp,b=b,face=4,&
                                               ni1 = ni1, ni2 = ni2,  &
                                               nj1 = nj1, nj2 = nj2,  &
@@ -368,6 +396,13 @@ do b=1,Nb ! post processing patches
                                  ci1 = ci1, ci2 = ci2, &
                                  cj1 = cj1, cj2 = cj2, &
                                  ck1 = ck1, ck2 = ck2)
+      if (pp%tau) call compute_tau(pp=pp,face=5,         &
+                                   ni1 = ni1, ni2 = ni2, &
+                                   nj1 = nj1, nj2 = nj2, &
+                                   nk1 = nk1, nk2 = nk2, &
+                                   ci1 = ci1, ci2 = ci2, &
+                                   cj1 = cj1, cj2 = cj2, &
+                                   ck1 = ck1, ck2 = ck2)
       if (pp%tec) error = file_tec%save_patch(Np=Np,pp=pp,b=b,face=5,&
                                               ni1 = ni1, ni2 = ni2,  &
                                               nj1 = nj1, nj2 = nj2,  &
@@ -401,6 +436,13 @@ do b=1,Nb ! post processing patches
                                  ci1 = ci1, ci2 = ci2, &
                                  cj1 = cj1, cj2 = cj2, &
                                  ck1 = ck1, ck2 = ck2)
+      if (pp%tau) call compute_tau(pp=pp,face=6,         &
+                                   ni1 = ni1, ni2 = ni2, &
+                                   nj1 = nj1, nj2 = nj2, &
+                                   nk1 = nk1, nk2 = nk2, &
+                                   ci1 = ci1, ci2 = ci2, &
+                                   cj1 = cj1, cj2 = cj2, &
+                                   ck1 = ck1, ck2 = ck2)
       if (pp%tec) error = file_tec%save_patch(Np=Np,pp=pp,b=b,face=6,&
                                               ni1 = ni1, ni2 = ni2,  &
                                               nj1 = nj1, nj2 = nj2,  &
@@ -482,6 +524,8 @@ contains
                                               required=.false.,act='store_true',def='.false.',error=error)
   call cli%add(pref='|-->',switch='-yplus',   help='Compute y+, Reynolds number and solution are necessary',&
                                               required=.false.,act='store_true',def='.false.',error=error)
+  call cli%add(pref='|-->',switch='-tau',     help='Compute tau, Reynolds number and solution are necessary',&
+                                              required=.false.,act='store_true',def='.false.',error=error)
   call cli%add(pref='|-->',switch='-metrics', help='Save metrics variables',&
                                               required=.false.,act='store_true',def='.false.',error=error)
   call cli%add(pref='|-->',switch='-ascii',   help='write ascii output files',&
@@ -546,6 +590,18 @@ contains
     endif
     if (pp%Re<0._R_P) then
       write(stderr,'(A)')'+--> Trying to compute y+ without provide Reynolds number!'
+      write(stderr,'(A)')'|--> The Reynolds number must be provide either by command line argument or by mb.par'
+      stop
+    endif
+  endif
+  ! checking that all the info for tau computing have been provided
+  if (pp%tau) then
+    if (.not.pp%sol) then
+      write(stderr,'(A)')'+-->  Trying to compute tau without provide solution file!'
+      stop
+    endif
+    if (pp%Re<0._R_P) then
+      write(stderr,'(A)')'+--> Trying to compute tau without provide Reynolds number!'
       write(stderr,'(A)')'|--> The Reynolds number must be provide either by command line argument or by mb.par'
       stop
     endif

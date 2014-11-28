@@ -53,6 +53,7 @@ type, public:: Type_PostProcess
   logical::                   global_blk_num = .false.   !< Flag for inquiring the activation of global blocks numeration.
   logical::                   forces         = .false.   !< Inquiring flag for forces computing.
   logical::                   yp             = .false.   !< Inquiring flag for yplus computing.
+  logical::                   tau            = .false.   !< Inquiring flag for tau computing.
   logical::                   metrics        = .false.   !< Inquiring flag for metrics saving.
   logical::                   verbose        = .false.   !< Verbose output.
   type(Type_OS)::             OS                         !< Running architecture.
@@ -98,6 +99,7 @@ contains
   call cli%get(switch='-forces',  val=pp%forces,   error=error,pref='|-->'); if (error/=0) stop
   call cli%get(switch='-metrics', val=pp%metrics,  error=error,pref='|-->'); if (error/=0) stop
   call cli%get(switch='-yplus',   val=pp%yp,       error=error,pref='|-->'); if (error/=0) stop
+  call cli%get(switch='-tau',     val=pp%tau,      error=error,pref='|-->'); if (error/=0) stop
   call cli%get(switch='-ls',      val=pp%level_set,error=error,pref='|-->'); if (error/=0) stop
   call cli%get(switch='-nt',      val=pp%laminar,  error=error,pref='|-->'); if (error/=0) stop
   call cli%get(switch='-eq',      val=turb_eq,     error=error,pref='|-->'); if (error/=0) stop

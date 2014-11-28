@@ -107,6 +107,14 @@ contains
         file_d%tecvarname = trim(file_d%tecvarname)//' "yplus"'
       endif
     endif
+    if (pp%tau) then
+      file_d%nvar = file_d%nvar + 3 ! taux,tauy,tauz
+      if (pp%binary) then
+        file_d%tecvarname = trim(file_d%tecvarname)//' taux tauy tauz'
+      else
+        file_d%tecvarname = trim(file_d%tecvarname)//' "taux" "tauy" "tauz"'
+      endif
+    endif
   endif
   if (pp%metrics) then
     file_d%nvar = file_d%nvar + 4 ! Nx,Ny,Nz and S
@@ -269,7 +277,12 @@ contains
         error = tec_var(pp=pp,n=ncell,var= m_v(ci1:ci2,cj1:cj2,ck1:ck2)%z,d=1)
       endif
       if (yp) then
-        error = tec_var(pp=pp,n=ncell,var= yplus(ni1:ni2,cj1:cj2,ck1:ck2),d=1)
+        error = tec_var(pp=pp,n=ncell,var=yplus(ni1:ni2,cj1:cj2,ck1:ck2),d=1)
+      endif
+      if (pp%tau) then
+        error = tec_var(pp=pp,n=ncell,var=tau(ni1:ni2,cj1:cj2,ck1:ck2)%x,d=1)
+        error = tec_var(pp=pp,n=ncell,var=tau(ni1:ni2,cj1:cj2,ck1:ck2)%y,d=1)
+        error = tec_var(pp=pp,n=ncell,var=tau(ni1:ni2,cj1:cj2,ck1:ck2)%z,d=1)
       endif
     else
       call varinterpolation(ni1=ni1,ni2=ni2,nj1=nj1,nj2=nj2,nk1=nk1,nk2=nk2,face=face,&
@@ -410,6 +423,20 @@ contains
         call varinterpolation(ni1=ni1,ni2=ni2,nj1=nj1,nj2=nj2,nk1=nk1,nk2=nk2,face=face,&
                               var  = yplus(ni1:ni2+1,nj1:nj2+1,nk1:nk2+1),              &
                               vari = vari( ni1:ni2  ,nj1:nj2  ,nk1:nk2  ))
+        error = tec_var(pp=pp,n=nnode,var=vari(ni1:ni2,nj1:nj2,nk1:nk2),d=1)
+      endif
+      if (pp%tau) then
+        call varinterpolation(ni1=ni1,ni2=ni2,nj1=nj1,nj2=nj2,nk1=nk1,nk2=nk2,face=face,&
+                              var  = tau( ni1:ni2+1,nj1:nj2+1,nk1:nk2+1)%x,             &
+                              vari = vari(ni1:ni2  ,nj1:nj2  ,nk1:nk2  ))
+        error = tec_var(pp=pp,n=nnode,var=vari(ni1:ni2,nj1:nj2,nk1:nk2),d=1)
+        call varinterpolation(ni1=ni1,ni2=ni2,nj1=nj1,nj2=nj2,nk1=nk1,nk2=nk2,face=face,&
+                              var  = tau( ni1:ni2+1,nj1:nj2+1,nk1:nk2+1)%y,             &
+                              vari = vari(ni1:ni2  ,nj1:nj2  ,nk1:nk2  ))
+        error = tec_var(pp=pp,n=nnode,var=vari(ni1:ni2,nj1:nj2,nk1:nk2),d=1)
+        call varinterpolation(ni1=ni1,ni2=ni2,nj1=nj1,nj2=nj2,nk1=nk1,nk2=nk2,face=face,&
+                              var  = tau( ni1:ni2+1,nj1:nj2+1,nk1:nk2+1)%z,             &
+                              vari = vari(ni1:ni2  ,nj1:nj2  ,nk1:nk2  ))
         error = tec_var(pp=pp,n=nnode,var=vari(ni1:ni2,nj1:nj2,nk1:nk2),d=1)
       endif
     endif

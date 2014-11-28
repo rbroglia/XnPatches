@@ -252,7 +252,8 @@ $(DOBJ)block_variables.o: src/Block_Variables.f90 \
 
 $(DOBJ)data_type_command_line_interface.o: src/Data_Type_Command_Line_Interface.f90 \
 	$(DOBJ)ir_precision.o \
-	$(DOBJ)lib_io_misc.o
+	$(DOBJ)lib_io_misc.o \
+	$(DOBJ)lib_strings.o
 	@echo $(COTEXT) | tee -a make.log
 	@$(FC) $(OPTSC) $< -o $@ 1>> diagnostic_messages 2>> error_messages
 
@@ -289,6 +290,11 @@ $(DOBJ)lib_io_misc.o : Lib_IO_Misc.f90 \
 	$(DOBJ)data_type_os.o
 	@echo $(COTEXT) | tee -a make.log
 	@$(FC) $(OPTSC) $< -o $@ 1>> diagnostic_messages 2>> error_messages
+
+$(DOBJ)lib_strings.o: ./src/Lib_Strings.f90 \
+	$(DOBJ)ir_precision.o
+	@echo $(COTEXT)
+	@$(FC) $(OPTSC) $(PREPROC) -I./src  $< -o $@
 
 $(DOBJ)lib_tec.o: src/Lib_TEC.f90 \
 	$(DOBJ)ir_precision.o \

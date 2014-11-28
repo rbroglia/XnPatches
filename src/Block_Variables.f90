@@ -41,6 +41,7 @@ type(Type_Vector), allocatable:: f_p(:,:,:)       ! Forces vector, pressure part
 type(Type_Vector), allocatable:: f_v(:,:,:)       ! Forces vector, viscous  part.
 type(Type_Vector), allocatable:: m_p(:,:,:)       ! Moments vector, pressure part.
 type(Type_Vector), allocatable:: m_v(:,:,:)       ! Moments vector, viscous  part.
+type(Type_Vector), allocatable:: tau(:,:,:)       ! Ambiguos vector.
 !-----------------------------------------------------------------------------------------------------------------------------------
 contains
   !> @brief Procedure for allocating block variables.
@@ -75,7 +76,7 @@ contains
       if (allocated(ken)) deallocate(ken) ; allocate(ken(1-gc(1):Ni+gc(2),1-gc(3):Nj+gc(4),1-gc(5):Nk+gc(6)))
       if (allocated(eps)) deallocate(eps) ; allocate(eps(1-gc(1):Ni+gc(2),1-gc(3):Nj+gc(4),1-gc(5):Nk+gc(6)))
     endif
-    if (pp%metrics.or.pp%forces.or.pp%yp) then
+    if (pp%metrics.or.pp%forces.or.pp%yp.or.pp%tau) then
       if (allocated(NFi))    deallocate(NFi)    ; allocate(NFi   (0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
       if (allocated(NFj))    deallocate(NFj)    ; allocate(NFj   (0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
       if (allocated(NFk))    deallocate(NFk)    ; allocate(NFk   (0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
@@ -95,6 +96,9 @@ contains
     endif
     if (pp%yp) then
       if (allocated(yplus)) deallocate(yplus) ; allocate(yplus(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
+    endif
+    if (pp%tau) then
+      if (allocated(tau)) deallocate(tau) ; allocate(tau(0-gc(1):Ni+gc(2),0-gc(3):Nj+gc(4),0-gc(5):Nk+gc(6)))
     endif
   endif
   return
@@ -777,6 +781,143 @@ contains
   return
   !---------------------------------------------------------------------------------------------------------------------------------
   endsubroutine compute_yp
+
+  !> @brief Procedure for computing yplus variables.
+  subroutine compute_tau(pp,face,ni1,ni2,nj1,nj2,nk1,nk2,ci1,ci2,cj1,cj2,ck1,ck2)
+  !---------------------------------------------------------------------------------------------------------------------------------
+  implicit none
+  type(Type_PostProcess), intent(INOUT):: pp                      !< Post-processor data.
+  integer(I4P),           intent(IN)::    face                    !< Face where patch is defined: 1,2,3,4,5,6.
+  integer(I4P),           intent(IN)::    ni1,ni2                 !< First and last node i indexes.
+  integer(I4P),           intent(IN)::    nj1,nj2                 !< First and last node j indexes.
+  integer(I4P),           intent(IN)::    nk1,nk2                 !< First and last node k indexes.
+  integer(I4P),           intent(IN)::    ci1,ci2                 !< First and last cell i indexes.
+  integer(I4P),           intent(IN)::    cj1,cj2                 !< First and last cell j indexes.
+  integer(I4P),           intent(IN)::    ck1,ck2                 !< First and last cell k indexes.
+  type(Type_Vector)::                     NdS                     !< Normal "tilde" for viscous part of forces (or distance for y+).
+  integer(I4P)::                          i,j,k                   !< Counters.
+  !---------------------------------------------------------------------------------------------------------------------------------
+
+  !---------------------------------------------------------------------------------------------------------------------------------
+  select case(face)
+  case(1,2)
+    !$OMP PARALLEL DEFAULT(NONE)                                                                        &
+    !$OMP PRIVATE(i,j,k,NdS,hyd)                                                                        &
+    !$OMP SHARED(ni1,ni2,nj1,nj2,nk1,nk2,ci1,ci2,cj1,cj2,ck1,ck2,face,patch,rFr2,zfs,                   &
+    !$OMP        node,NFiS,NFjS,NFkS,volume,icc,ticc,f0,momentum,pressure,f_p,f_v,m_p,m_v,level_set,Re) &
+    !$OMP REDUCTION(+: fsumpx,fsumpy,fsumpz,fsumvx,fsumvy,fsumvz,Ssum)
+    !$OMP DO
+    do k=ck1,ck2
+      do j=cj1,cj2
+        ! checking if this is an active cell
+        if (ticc(ni1-1+face,j,k)/=pp%patch) cycle
+        if ( icc(ci1,j,k)/=0) cycle
+        if(pp%level_set) then
+          if (f0(ni1-1+face,j,k)>0._R_P) cycle
+        endif
+
+        ! viscous part of forces
+        NdS = (2._R_P*NFiS(ni1,j,k) + NFiS(ni1+1,j,k) + NFiS(ni1-1,j,k))/(2._R_P*(volume(ni1,j,k)+volume(ni1+1,j,k)))
+        tau(ci1,j,k) = (momentum(ci1-1+face,j,k) - momentum(ci1-2+face,j,k))*(NFi(ni1,j,k).dot.NdS)/pp%Re
+        tau(ci1,j,k) = (tau(ci1,j,k).ortho.(NFi(ni1,j,k)))
+
+        if (face==2) then
+          tau(ci1,j,k) = -tau(ci1,j,k)
+        endif
+      enddo
+    enddo
+    !$OMP END PARALLEL
+    if (.not.pp%cell) then ! extrapolating ghost cell values
+      tau(ci1,nj1  ,:    ) = tau(ci1,cj1,:  )
+      tau(ci1,nj2+1,:    ) = tau(ci1,nj2,:  )
+      tau(ci1,:    ,nk1  ) = tau(ci1,:  ,ck1)
+      tau(ci1,:    ,nk2+1) = tau(ci1,:  ,nk2)
+      ! corners
+      tau(ci1,nj1,nk1) = tau(ci1,cj1,ck1)
+      tau(ci1,nj1,nk2) = tau(ci1,cj1,ck2)
+      tau(ci1,nj2,nk1) = tau(ci1,cj2,ck1)
+      tau(ci1,nj2,nk2) = tau(ci1,cj2,ck2)
+    endif
+  case(3,4)
+    !$OMP PARALLEL DEFAULT(NONE)                                                                &
+    !$OMP PRIVATE(i,j,k,NdS,hyd)                                                                &
+    !$OMP SHARED(ni1,ni2,nj1,nj2,nk1,nk2,ci1,ci2,cj1,cj2,ck1,ck2,face,patch,rFr2,zfs,           &
+    !$OMP        node,NFiS,NFjS,NFkS,volume,icc,ticc,f0,momentum,pressure,f_p,f_v,level_set,Re) &
+    !$OMP REDUCTION(+: fsumpx,fsumpy,fsumpz,fsumvx,fsumvy,fsumvz,Ssum)
+    !$OMP DO
+    do k=ck1,ck2
+      do i=ci1,ci2
+        ! checking if this is an active cell
+        if (ticc(i,nj1-1+(face-2),k)/=pp%patch) cycle
+        if ( icc(i,cj1,k)/=0) cycle
+        if(pp%level_set) then
+          if (f0(i,nj1-1+(face-2),k)>0._R_P) cycle
+        endif
+
+        ! viscous part of forces
+        NdS = (2._R_P*NFjS(i,nj1,k) + NFjS(i,nj1+1,k) + NFjS(i,nj1-1,k))/(2._R_P*(volume(i,nj1,k)+volume(i,nj1+1,k)))
+        tau(i,cj1,k) = (momentum(i,cj1-1+(face-2),k) - momentum(i,cj1-2+(face-2),k))*(NFj(i,nj1,k).dot.NdS)/pp%Re
+        tau(i,cj1,k) = (tau(i,cj1,k).ortho.(NFj(i,nj1,k)))
+
+        if (face==4) then
+          tau(i,cj1,k) = -tau(i,cj1,k)
+        endif
+      enddo
+    enddo
+    !$OMP END PARALLEL
+    if (.not.pp%cell) then ! extrapolating ghost cell values
+      tau(ni1  ,cj1,:    ) = tau(ci1,cj1,:  )
+      tau(ni2+1,cj1,:    ) = tau(ni2,cj1,:  )
+      tau(:    ,cj1,nk1  ) = tau(:  ,cj1,ck1)
+      tau(:    ,cj1,nk2+1) = tau(:  ,cj1,nk2)
+      ! corners
+      tau(ni1,cj1,nk1) = tau(ci1,cj1,ck1)
+      tau(ni1,cj1,nk2) = tau(ci1,cj1,ck2)
+      tau(ni2,cj1,nk1) = tau(ci2,cj1,ck1)
+      tau(ni2,cj1,nk2) = tau(ci2,cj1,ck2)
+    endif
+  case(5,6)
+    !$OMP PARALLEL DEFAULT(NONE)                                                                &
+    !$OMP PRIVATE(i,j,k,NdS,hyd)                                                                &
+    !$OMP SHARED(ni1,ni2,nj1,nj2,nk1,nk2,ci1,ci2,cj1,cj2,ck1,ck2,face,patch,rFr2,zfs,           &
+    !$OMP        node,NFiS,NFjS,NFkS,volume,icc,ticc,f0,momentum,pressure,f_p,f_v,level_set,Re) &
+    !$OMP REDUCTION(+: fsumpx,fsumpy,fsumpz,fsumvx,fsumvy,fsumvz,Ssum)
+    !$OMP DO
+    do j=cj1,cj2
+      do i=ci1,ci2
+        ! checking if this is an active cell
+        if (ticc(i,j,nk1-1+(face-4))/=pp%patch) cycle
+        if ( icc(i,j,ck1)/=0) cycle
+        if(pp%level_set) then
+          if (f0(i,j,nk1-1+(face-4))>0._R_P) cycle
+        endif
+
+        ! viscous part of forces
+        NdS = (2._R_P*NFkS(i,j,nk1) + NFkS(i,j,nk1+1) + NFkS(i,j,nk1-1))/(2._R_P*(volume(i,j,nk1)+volume(i,j,nk1+1)))
+        tau(i,j,ck1) = (momentum(i,j,ck1-1+(face-4)) - momentum(i,j,ck1-2+(face-4)))*(NFk(i,j,nk1).dot.NdS)/pp%Re
+        tau(i,j,ck1) = (tau(i,j,ck1).ortho.(NFk(i,j,nk1)))
+
+        if (face==6) then
+          tau(i,j,ck1) = -tau(i,j,ck1)
+        endif
+      enddo
+    enddo
+    !$OMP END PARALLEL
+    if (.not.pp%cell) then ! extrapolating ghost cell values
+      tau(ni1  ,:    ,ck1) = tau(ci1,:  ,ck1)
+      tau(ni2+1,:    ,ck1) = tau(ni2,:  ,ck1)
+      tau(:    ,nj1  ,ck1) = tau(:  ,cj1,ck1)
+      tau(:    ,nj2+1,ck1) = tau(:  ,nj2,ck1)
+      ! corners
+      tau(ni1,nj1,ck1) = tau(ci1,cj1,ck1)
+      tau(ni1,nj2,ck1) = tau(ci1,cj2,ck1)
+      tau(ni2,nj1,ck1) = tau(ci2,cj1,ck1)
+      tau(ni2,nj2,ck1) = tau(ci2,cj2,ck1)
+    endif
+  endselect
+  return
+  !---------------------------------------------------------------------------------------------------------------------------------
+  endsubroutine compute_tau
 
   !> @brief Procedure for interpolating cell centered variable into node centered one.
   subroutine varinterpolation(ni1,ni2,nj1,nj2,nk1,nk2,face,var,vari)
