@@ -475,6 +475,14 @@ if (allocated(rcc)) deallocate(rcc)
 
 if (Np==0) then
   write(stdout,'(A)')'+--> No patches have been found!'
+  write(stdout,'(A)')'+--> Removing output file containing no patch data'
+  if (pp%tec) then
+    if (pp%binary) then
+      error = pp%OS%remove_file(filename=adjustl(trim(pp%File_out))//".plt")
+    else
+      error = pp%OS%remove_file(filename=adjustl(trim(pp%File_out))//".dat")
+    endif
+  endif
 endif
 stop
 !-----------------------------------------------------------------------------------------------------------------------------------
