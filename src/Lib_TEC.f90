@@ -134,7 +134,7 @@ contains
   if (pp%binary) then
     error = tecini112(file_d%tecendrec,                          &
                       trim(file_d%tecvarname)//file_d%tecendrec, &
-                      adjustl(trim(pp%File_out))//".plt"//file_d%tecendrec,'.'//file_d%tecendrec,0,0,1)
+                      adjustl(trim(pp%File_out))//"."//trim(strz(2,pp%patch))//".plt"//file_d%tecendrec,'.'//file_d%tecendrec,0,0,1)
   else
     open(unit=Get_Unit(pp%unit_out),file=adjustl(trim(pp%File_out))//".dat")
     write(pp%unit_out,'(A)',iostat=error)trim(file_d%tecvarname)
