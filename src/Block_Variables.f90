@@ -934,24 +934,11 @@ contains
   do k=nk1,nk2
     do j=nj1,nj2
       do i=ni1,ni2
-        select case(face)
-        case(1,2) ! ni1=ni2 => interpolating patch ni1+1=ci1
-          vari(i,j,k) = var(i+1,j+1,k+1) &
-                      + var(i+1,j,  k+1) &
-                      + var(i+1,j+1,k  ) &
-                      + var(i+1,j  ,k  )
-        case(3,4) ! nj1=nj2 => interpolating patch nj1+1=cj1
-          vari(i,j,k) = var(i+1,j+1,k+1) &
-                      + var(i  ,j+1,k+1) &
-                      + var(i+1,j+1,k  ) &
-                      + var(i  ,j+1,k  )
-        case(5,6) ! nk1=nk2 => interpolating patch nk1+1=ck1
-          vari(i,j,k) = var(i+1,j+1,k+1) &
-                      + var(i  ,j+1,k+1) &
-                      + var(i+1,j  ,k+1) &
-                      + var(i  ,j  ,k+1)
-        endselect
-        vari(i,j,k) = 0.25_R_P*vari(i,j,k)
+        vari(i,j,k) =  var(i+1,j+1,k+1) + var(i+1,j+1,k)  &
+                     + var(i  ,j+1,k+1) + var(i  ,j+1,k)  &
+                     + var(i+1,j  ,k+1) + var(i+1,j  ,k)  &
+                     + var(i  ,j  ,k+1) + var(i  ,j  ,k)
+        vari(i,j,k) = 0.125_R_P*vari(i,j,k)
       enddo
     enddo
   enddo
